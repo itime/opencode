@@ -21,6 +21,7 @@ export const WriteTool = Tool.define("write", {
   parameters: z.object({
     content: z.string().describe("The content to write to the file"),
     filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
+    force: z.boolean().optional().describe("Skip the read-before-write check for existing files (upsert mode)"),
   }),
   async execute(params, ctx) {
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
@@ -29,7 +30,7 @@ export const WriteTool = Tool.define("write", {
     const file = Bun.file(filepath)
     const exists = await file.exists()
     const contentOld = exists ? await file.text() : ""
-    if (exists) await FileTime.assert(ctx.sessionID, filepath)
+    if (exists && !params.force) await FileTime.assert(ctx.sessionID, filepath)
 
     const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, params.content))
     await ctx.ask({
