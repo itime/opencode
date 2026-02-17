@@ -15,11 +15,11 @@ import { usePromptStash } from "./stash"
 import { DialogStash } from "../dialog-stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useRenderer } from "@opentui/solid"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
-import type { FilePart } from "@opencode-ai/sdk/v2"
+import type { FilePart, AssistantMessage } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
@@ -32,6 +32,28 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { useDirectory } from "../../context/directory"
+
+function width(input: string) {
+  return input.length
+}
+
+function fitLeft(input: string, max: number) {
+  if (max <= 0) return ""
+  if (input.length <= max) return input
+  if (max === 1) return "…"
+  return input.slice(0, max - 1) + "…"
+}
+
+function row(left: string, right: string, cols: number) {
+  const w = Math.max(0, cols | 0)
+  const rw = width(right)
+  if (rw >= w) return right.slice(Math.max(0, right.length - w))
+  const min = 1
+  const leftMax = w - rw - min
+  const l = fitLeft(left, leftMax)
+  return l + " ".repeat(Math.max(min, w - width(l) - rw)) + right
+}
 
 export type PromptProps = {
   sessionID?: string
@@ -73,6 +95,8 @@ export function Prompt(props: PromptProps) {
   const stash = usePromptStash()
   const command = useCommandDialog()
   const renderer = useRenderer()
+  const dimensions = useTerminalDimensions()
+  const directory = useDirectory()
   const { theme, syntax } = useTheme()
   const kv = useKV()
 
@@ -117,6 +141,31 @@ export function Prompt(props: PromptProps) {
     if (!messages) return undefined
     return messages.findLast((m) => m.role === "user")
   })
+
+  const messages = createMemo(() => props.sessionID ? sync.data.message[props.sessionID] ?? [] : [])
+
+  const contextInfo = createMemo(() => {
+    const last = messages().findLast((x) => x.role === "assistant" && x.tokens.output > 0) as AssistantMessage
+    if (!last) return
+    const total =
+      last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
+    const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
+    const contextLimit = model?.limit.context || 200000
+    return {
+      tokens: total.toLocaleString(),
+      percentage: Math.round((total / contextLimit) * 100),
+    }
+  })
+
+  const sessionCost = createMemo(() => {
+    const total = messages().reduce((sum, x) => sum + (x.role === "assistant" ? x.cost : 0), 0)
+    if (total <= 0) return undefined
+    return total < 0.01 ? `${(total * 100).toFixed(0)}¢` : `$${total.toFixed(3)}`
+  })
+
+  const mcpCount = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
+  const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
+  const lspCount = createMemo(() => sync.data.lsp.length)
 
   const [store, setStore] = createStore<{
     prompt: PromptInfo
@@ -1041,12 +1090,11 @@ export function Prompt(props: PromptProps) {
             }
           />
         </box>
-        <box flexDirection="row" justifyContent="space-between">
-          <Show when={status().type !== "idle"} fallback={<text />}>
+        <box flexDirection="column">
+          <Show when={status().type !== "idle"}>
             <box
               flexDirection="row"
               gap={1}
-              flexGrow={1}
               justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
             >
               <box flexShrink={0} flexDirection="row" gap={1}>
@@ -1122,30 +1170,44 @@ export function Prompt(props: PromptProps) {
               </text>
             </box>
           </Show>
-          <Show when={status().type !== "retry"}>
-            <box gap={2} flexDirection="row">
-              <Switch>
-                <Match when={store.mode === "normal"}>
-                  <Show when={local.model.variant.list().length > 0}>
-                    <text fg={theme.text}>
-                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                    </text>
-                  </Show>
-                  <text fg={theme.text}>
-                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
-                  </text>
-                  <text fg={theme.text}>
-                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                  </text>
-                </Match>
-                <Match when={store.mode === "shell"}>
-                  <text fg={theme.text}>
-                    esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                  </text>
-                </Match>
-              </Switch>
-            </box>
-          </Show>
+          {(() => {
+            const right = store.mode === "shell"
+              ? `esc exit shell mode`
+              : [
+                  local.model.variant.list().length > 0 ? `${keybind.print("variant_cycle")} variants` : undefined,
+                  `${keybind.print("agent_cycle")} agents`,
+                  `${keybind.print("command_list")} commands`,
+                ]
+                  .filter((x): x is string => !!x)
+                  .join("  ")
+
+            const dir = directory().split(":")[0]
+            const branch = sync.data.vcs?.branch
+            const diff = props.sessionID ? sync.data.session_diff[props.sessionID] ?? [] : []
+            const diffCount = diff.length
+
+            const pct = contextInfo()?.percentage ?? 0
+            const segments = 8
+            const filled = Math.round((pct / 100) * segments)
+            const progressBar = "▆".repeat(filled) + "▁".repeat(segments - filled)
+
+            const left = [
+              `📁 ${dir}`,
+              branch ? `🌿 ${branch}${diffCount > 0 ? ` (${diffCount})` : ""}` : undefined,
+              contextInfo() ? `🧠 ${progressBar} ${pct}%` : undefined,
+              sessionCost() ? `💰 ${sessionCost()}` : undefined,
+              `${lspCount()} LSP`,
+              mcpCount() > 0 ? `${mcpCount()} MCP` : undefined,
+            ]
+              .filter((x): x is string => !!x)
+              .join(" | ")
+
+            return (
+              <text fg={theme.textMuted} wrapMode="none" flexShrink={0} marginTop={1}>
+                {row(left, right, dimensions().width)}
+              </text>
+            )
+          })()}
         </box>
       </box>
     </>
