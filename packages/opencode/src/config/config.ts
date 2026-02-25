@@ -1008,6 +1008,10 @@ export namespace Config {
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
       theme: z.string().optional().describe("Theme name to use for the interface"),
+      theme_mode: z
+        .enum(["dark", "light", "auto"])
+        .optional()
+        .describe("Force dark or light mode instead of auto-detecting terminal background"),
       keybinds: Keybinds.optional().describe("Custom keybind configurations"),
       logLevel: Log.Level.optional().describe("Log level"),
       tui: TUI.optional().describe("TUI specific settings"),

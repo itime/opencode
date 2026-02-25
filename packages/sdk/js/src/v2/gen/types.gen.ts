@@ -1691,6 +1691,10 @@ export type Config = {
    * Theme name to use for the interface
    */
   theme?: string
+  /**
+   * Force dark or light mode instead of auto-detecting terminal background
+   */
+  theme_mode?: "dark" | "light" | "auto"
   keybinds?: KeybindsConfig
   logLevel?: LogLevel
   /**

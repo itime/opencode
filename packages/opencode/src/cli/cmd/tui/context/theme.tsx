@@ -281,9 +281,11 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   init: (props: { mode: "dark" | "light" }) => {
     const sync = useSync()
     const kv = useKV()
+    const configMode = sync.data.config.theme_mode
+    const initialMode = configMode && configMode !== "auto" ? configMode : kv.get("theme_mode", props.mode)
     const [store, setStore] = createStore({
       themes: DEFAULT_THEMES,
-      mode: kv.get("theme_mode", props.mode),
+      mode: initialMode,
       active: (sync.data.config.theme ?? kv.get("theme", "opencode")) as string,
       ready: false,
     })
@@ -291,6 +293,11 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     createEffect(() => {
       const theme = sync.data.config.theme
       if (theme) setStore("active", theme)
+    })
+
+    createEffect(() => {
+      const cm = sync.data.config.theme_mode
+      if (cm && cm !== "auto") setStore("mode", cm)
     })
 
     function init() {
