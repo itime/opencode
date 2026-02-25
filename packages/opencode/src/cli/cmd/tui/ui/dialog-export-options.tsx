@@ -105,6 +105,8 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           placeholder="Enter filename"
           textColor={theme.text}
           focusedTextColor={theme.text}
+          selectionBg={theme.selectionBg}
+          selectionFg={theme.selectionFg}
           cursorColor={theme.text}
         />
       </box>

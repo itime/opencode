@@ -95,6 +95,8 @@ type ThemeColors = {
   syntaxType: RGBA
   syntaxOperator: RGBA
   syntaxPunctuation: RGBA
+  selectionBg: RGBA
+  selectionFg: RGBA
 }
 
 type Theme = ThemeColors & {
@@ -130,9 +132,14 @@ type ColorValue = HexColor | RefName | Variant | RGBA
 type ThemeJson = {
   $schema?: string
   defs?: Record<string, HexColor | RefName>
-  theme: Omit<Record<keyof ThemeColors, ColorValue>, "selectedListItemText" | "backgroundMenu"> & {
+  theme: Omit<
+    Record<keyof ThemeColors, ColorValue>,
+    "selectedListItemText" | "backgroundMenu" | "selectionBg" | "selectionFg"
+  > & {
     selectedListItemText?: ColorValue
     backgroundMenu?: ColorValue
+    selectionBg?: ColorValue
+    selectionFg?: ColorValue
     thinkingOpacity?: number
   }
 }
@@ -198,7 +205,14 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
 
   const resolved = Object.fromEntries(
     Object.entries(theme.theme)
-      .filter(([key]) => key !== "selectedListItemText" && key !== "backgroundMenu" && key !== "thinkingOpacity")
+      .filter(
+        ([key]) =>
+          key !== "selectedListItemText" &&
+          key !== "backgroundMenu" &&
+          key !== "selectionBg" &&
+          key !== "selectionFg" &&
+          key !== "thinkingOpacity",
+      )
       .map(([key, value]) => {
         return [key, resolveColor(value as ColorValue)]
       }),
@@ -219,6 +233,20 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
     resolved.backgroundMenu = resolveColor(theme.theme.backgroundMenu)
   } else {
     resolved.backgroundMenu = resolved.backgroundElement
+  }
+
+  // Handle selectionBg/selectionFg - optional with auto-derived defaults
+  if (theme.theme.selectionBg !== undefined) {
+    resolved.selectionBg = resolveColor(theme.theme.selectionBg)
+  } else {
+    const bg = resolved.background!
+    const primary = resolved.primary!
+    resolved.selectionBg = RGBA.fromValues(primary.r, primary.g, primary.b, 0.3)
+  }
+  if (theme.theme.selectionFg !== undefined) {
+    resolved.selectionFg = resolveColor(theme.theme.selectionFg)
+  } else {
+    resolved.selectionFg = resolved.text
   }
 
   // Handle thinkingOpacity - optional with default of 0.6

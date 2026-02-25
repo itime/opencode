@@ -56,6 +56,8 @@ export function DialogPrompt(props: DialogPromptProps) {
           placeholder={props.placeholder ?? "Enter text"}
           textColor={theme.text}
           focusedTextColor={theme.text}
+          selectionBg={theme.selectionBg}
+          selectionFg={theme.selectionFg}
           cursorColor={theme.text}
         />
       </box>

@@ -874,6 +874,8 @@ export function Prompt(props: PromptProps) {
               placeholder={placeholderText()}
               textColor={keybind.leader ? theme.textMuted : theme.text}
               focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
+              selectionBg={theme.selectionBg}
+              selectionFg={theme.selectionFg}
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {

@@ -391,6 +391,8 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                         maxHeight={6}
                         textColor={theme.text}
                         focusedTextColor={theme.text}
+                        selectionBg={theme.selectionBg}
+                        selectionFg={theme.selectionFg}
                         cursorColor={theme.primary}
                         keyBindings={bindings()}
                       />

@@ -79,6 +79,8 @@ function EditBody(props: { request: PermissionRequest }) {
             width="100%"
             wrapMode="word"
             fg={theme.text}
+            selectionBg={theme.selectionBg}
+            selectionFg={theme.selectionFg}
             addedBg={theme.diffAddedBg}
             removedBg={theme.diffRemovedBg}
             contextBg={theme.diffContextBg}
@@ -354,6 +356,8 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
           focused
           textColor={theme.text}
           focusedTextColor={theme.text}
+          selectionBg={theme.selectionBg}
+          selectionFg={theme.selectionFg}
           cursorColor={theme.primary}
           keyBindings={textareaKeybindings()}
         />

@@ -1389,6 +1389,8 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
           content={"_Thinking:_ " + content()}
           conceal={ctx.conceal()}
           fg={theme.textMuted}
+          selectionBg={theme.selectionBg}
+          selectionFg={theme.selectionFg}
         />
       </box>
     </Show>
@@ -1419,6 +1421,8 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               content={props.part.text.trim()}
               conceal={ctx.conceal()}
               fg={theme.text}
+              selectionBg={theme.selectionBg}
+              selectionFg={theme.selectionFg}
             />
           </Match>
         </Switch>
@@ -1753,6 +1757,8 @@ function Write(props: ToolProps<typeof WriteTool>) {
             <code
               conceal={false}
               fg={theme.text}
+              selectionBg={theme.selectionBg}
+              selectionFg={theme.selectionFg}
               filetype={filetype(props.input.filePath!)}
               syntaxStyle={syntax()}
               content={code()}
@@ -1970,6 +1976,8 @@ function Edit(props: ToolProps<typeof EditTool>) {
               width="100%"
               wrapMode={ctx.diffWrapMode()}
               fg={theme.text}
+              selectionBg={theme.selectionBg}
+              selectionFg={theme.selectionFg}
               addedBg={theme.diffAddedBg}
               removedBg={theme.diffRemovedBg}
               contextBg={theme.diffContextBg}
@@ -2028,6 +2036,8 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
           width="100%"
           wrapMode={ctx.diffWrapMode()}
           fg={theme.text}
+          selectionBg={theme.selectionBg}
+          selectionFg={theme.selectionFg}
           addedBg={theme.diffAddedBg}
           removedBg={theme.diffRemovedBg}
           contextBg={theme.diffContextBg}
