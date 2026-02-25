@@ -958,6 +958,7 @@ export namespace Config {
         .record(
           z.string(),
           ModelsDev.Model.partial().extend({
+            context: z.number().optional().describe("Shorthand for limit.context - context window size in tokens"),
             variants: z
               .record(
                 z.string(),
@@ -1169,6 +1170,21 @@ export namespace Config {
             .min(0)
             .optional()
             .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
+        })
+        .optional(),
+      handoff: z
+        .object({
+          enabled: z.boolean().optional().describe("Enable handoff threshold detection (default: true)"),
+          threshold: z
+            .number()
+            .min(0)
+            .max(1)
+            .optional()
+            .describe("Context usage threshold (0-1) to suggest handoff (default: 0.85)"),
+          auto: z
+            .boolean()
+            .optional()
+            .describe("Automatically trigger handoff when threshold is reached (default: false)"),
         })
         .optional(),
       experimental: z

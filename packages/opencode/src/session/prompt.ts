@@ -11,6 +11,7 @@ import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
 import { SessionCompaction } from "./compaction"
+import { SessionHandoff } from "./handoff"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
@@ -530,6 +531,15 @@ export namespace SessionPrompt {
         })
         if (result === "stop") break
         continue
+      }
+
+      // handoff threshold check (before compaction)
+      if (lastFinished && lastFinished.summary !== true) {
+        await SessionHandoff.checkThreshold({
+          tokens: lastFinished.tokens,
+          model,
+          sessionID,
+        })
       }
 
       // context overflow, needs compaction
@@ -1892,28 +1902,23 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     modelID: string
   }) {
     if (input.session.parentID) return
-    if (!Session.isDefaultTitle(input.session.title)) return
 
-    // Find first non-synthetic user message
-    const firstRealUserIdx = input.history.findIndex(
+    const realUserMessages = input.history.filter(
       (m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic),
     )
-    if (firstRealUserIdx === -1) return
+    if (realUserMessages.length === 0) return
 
-    const isFirst =
-      input.history.filter((m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic))
-        .length === 1
-    if (!isFirst) return
+    const recentUserMessages = realUserMessages.slice(-3)
+    const userTexts = recentUserMessages
+      .flatMap((m) => m.parts.filter((p) => p.type === "text" && !("synthetic" in p && p.synthetic)))
+      .map((p) => (p as MessageV2.TextPart).text)
+      .filter((t) => t && t.length > 0)
+      .join("\n---\n")
 
-    // Gather all messages up to and including the first real user message for context
-    // This includes any shell/subtask executions that preceded the user's first prompt
-    const contextMessages = input.history.slice(0, firstRealUserIdx + 1)
-    const firstRealUser = contextMessages[firstRealUserIdx]
+    if (!userTexts.trim() || userTexts.length < 5) return
 
-    // For subtask-only messages (from command invocations), extract the prompt directly
-    // since toModelMessage converts subtask parts to generic "The following tool was executed by the user"
-    const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as MessageV2.SubtaskPart[]
-    const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
+    const currentTitle = input.session.title
+    const hasDefaultTitle = Session.isDefaultTitle(currentTitle)
 
     const agent = await Agent.get("title")
     if (!agent) return
@@ -1923,9 +1928,14 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
       )
     })
+
+    const prompt = hasDefaultTitle
+      ? `Generate a concise title (≤50 chars) for this conversation based on the user's messages:\n\n${userTexts}`
+      : `Current title: "${currentTitle}"\n\nUser's recent messages:\n${userTexts}\n\nIf the conversation topic has significantly changed and needs a new title, output the new title. If the current title is still appropriate, output exactly: KEEP_CURRENT_TITLE`
+
     const result = await LLM.stream({
       agent,
-      user: firstRealUser.info as MessageV2.User,
+      user: recentUserMessages[recentUserMessages.length - 1].info as MessageV2.User,
       system: [],
       small: true,
       tools: {},
@@ -1933,15 +1943,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       abort: new AbortController().signal,
       sessionID: input.session.id,
       retries: 2,
-      messages: [
-        {
-          role: "user",
-          content: "Generate a title for this conversation:\n",
-        },
-        ...(hasOnlySubtaskParts
-          ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-          : MessageV2.toModelMessages(contextMessages, model)),
-      ],
+      messages: [{ role: "user", content: prompt }],
     })
     const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
     if (text) {
@@ -1950,7 +1952,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         .split("\n")
         .map((line) => line.trim())
         .find((line) => line.length > 0)
-      if (!cleaned) return
+      if (!cleaned || cleaned === "KEEP_CURRENT_TITLE") return
 
       const title = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
       return Session.setTitle({ sessionID: input.session.id, title })

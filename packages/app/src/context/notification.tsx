@@ -287,10 +287,28 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
 
     const unsub = globalSDK.event.listen((e) => {
       const event = e.details
-      if (event.type !== "session.idle" && event.type !== "session.error") return
-
       const directory = e.name
       const time = Date.now()
+
+      if (event.type === "session.handoff.threshold_reached") {
+        const props = event.properties as {
+          sessionID: string
+          usage: number
+          threshold: number
+          action: "suggest" | "auto"
+        }
+        const usagePercent = Math.round(props.usage * 100)
+        const thresholdPercent = Math.round(props.threshold * 100)
+        void platform.notify(
+          language.t("notification.session.handoff.title"),
+          language.t("notification.session.handoff.description", { usage: usagePercent, threshold: thresholdPercent }),
+          `/${base64Encode(directory)}/session/${props.sessionID}`,
+        )
+        return
+      }
+
+      if (event.type !== "session.idle" && event.type !== "session.error") return
+
       if (event.type === "session.idle") {
         handleSessionIdle(directory, event, time)
         return

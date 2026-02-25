@@ -142,7 +142,7 @@ export function Prompt(props: PromptProps) {
     return messages.findLast((m) => m.role === "user")
   })
 
-  const messages = createMemo(() => props.sessionID ? sync.data.message[props.sessionID] ?? [] : [])
+  const messages = createMemo(() => (props.sessionID ? (sync.data.message[props.sessionID] ?? []) : []))
 
   const contextInfo = createMemo(() => {
     const last = messages().findLast((x) => x.role === "assistant" && x.tokens.output > 0) as AssistantMessage
@@ -152,7 +152,10 @@ export function Prompt(props: PromptProps) {
     const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
     const contextLimit = model?.limit.context || 200000
     return {
-      tokens: total.toLocaleString(),
+      tokens: total,
+      tokensFormatted: total.toLocaleString(),
+      contextLimit,
+      contextLimitFormatted: contextLimit.toLocaleString(),
       percentage: Math.round((total / contextLimit) * 100),
     }
   })
@@ -173,6 +176,7 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: Map<number, number>
     interrupt: number
     placeholder: number
+    contextHover: boolean
   }>({
     placeholder: Math.floor(Math.random() * PLACEHOLDERS.length),
     prompt: {
@@ -182,6 +186,7 @@ export function Prompt(props: PromptProps) {
     mode: "normal",
     extmarkToPartIndex: new Map(),
     interrupt: 0,
+    contextHover: false,
   })
 
   createEffect(
@@ -1171,41 +1176,95 @@ export function Prompt(props: PromptProps) {
             </box>
           </Show>
           {(() => {
-            const right = store.mode === "shell"
-              ? `esc exit shell mode`
-              : [
-                  local.model.variant.list().length > 0 ? `${keybind.print("variant_cycle")} variants` : undefined,
-                  `${keybind.print("agent_cycle")} agents`,
-                  `${keybind.print("command_list")} commands`,
-                ]
-                  .filter((x): x is string => !!x)
-                  .join("  ")
+            const right =
+              store.mode === "shell"
+                ? `esc exit shell mode`
+                : [
+                    local.model.variant.list().length > 0 ? `${keybind.print("variant_cycle")} variants` : undefined,
+                    `${keybind.print("agent_cycle")} agents`,
+                    `${keybind.print("command_list")} commands`,
+                  ]
+                    .filter((x): x is string => !!x)
+                    .join("  ")
 
             const dir = directory().split(":")[0]
             const branch = sync.data.vcs?.branch
-            const diff = props.sessionID ? sync.data.session_diff[props.sessionID] ?? [] : []
+            const diff = props.sessionID ? (sync.data.session_diff[props.sessionID] ?? []) : []
             const diffCount = diff.length
 
             const pct = contextInfo()?.percentage ?? 0
-            const segments = 8
-            const filled = Math.round((pct / 100) * segments)
-            const progressBar = "▆".repeat(filled) + "▁".repeat(segments - filled)
+            const termWidth = dimensions().width
 
-            const left = [
+            const leftParts = [
               `📁 ${dir}`,
               branch ? `🌿 ${branch}${diffCount > 0 ? ` (${diffCount})` : ""}` : undefined,
-              contextInfo() ? `🧠 ${progressBar} ${pct}%` : undefined,
+            ].filter((x): x is string => !!x)
+
+            const rightParts = [
               sessionCost() ? `💰 ${sessionCost()}` : undefined,
               `${lspCount()} LSP`,
               mcpCount() > 0 ? `${mcpCount()} MCP` : undefined,
-            ]
-              .filter((x): x is string => !!x)
-              .join(" | ")
+            ].filter((x): x is string => !!x)
+
+            const leftStr = leftParts.join(" | ")
+            const rightStr = rightParts.join(" | ")
+            const rightKeybinds = right
+
+            const contextEstimate = contextInfo() ? `🧠 ▆▆▆▆▆▆▆▆ ${pct}%`.length : 0
+            const leftLen =
+              leftStr.length + (contextEstimate > 0 ? 3 + contextEstimate : 0) + (rightStr ? 3 + rightStr.length : 0)
+            const totalLen = leftLen + rightKeybinds.length + 2
+            const narrow = totalLen > termWidth
+
+            const segments = narrow ? 3 : 8
+            const filled = Math.min(segments, Math.max(0, Math.round((pct / 100) * segments))) || 0
+            const progressBar = "▆".repeat(filled) + "▁".repeat(segments - filled)
+
+            const contextDisplay = () => {
+              const info = contextInfo()
+              if (!info) return undefined
+              if (store.contextHover) {
+                return `🧠 ${info.tokensFormatted}/${info.contextLimitFormatted} tok (${info.percentage}%)`
+              }
+              return `🧠 ${progressBar} ${pct}%`
+            }
+
+            const contextStr = contextDisplay()
 
             return (
-              <text fg={theme.textMuted} wrapMode="none" flexShrink={0} marginTop={1}>
-                {row(left, right, dimensions().width)}
-              </text>
+              <box flexDirection="column" marginTop={1} flexShrink={0}>
+                <box flexDirection={narrow ? "column" : "row"} justifyContent="space-between">
+                  <box flexDirection="row" gap={0} flexShrink={1}>
+                    <text fg={theme.textMuted} wrapMode="none">
+                      {leftStr}
+                    </text>
+                    <Show when={contextStr}>
+                      <text fg={theme.textMuted} wrapMode="none">
+                        {" | "}
+                      </text>
+                      <text
+                        fg={store.contextHover ? theme.text : theme.textMuted}
+                        wrapMode="none"
+                        onMouseOver={() => setStore("contextHover", true)}
+                        onMouseOut={() => setStore("contextHover", false)}
+                      >
+                        {contextStr}
+                      </text>
+                    </Show>
+                    <Show when={rightStr}>
+                      <text fg={theme.textMuted} wrapMode="none">
+                        {" | "}
+                        {rightStr}
+                      </text>
+                    </Show>
+                  </box>
+                  <box flexDirection="row" justifyContent={narrow ? "flex-end" : "flex-start"}>
+                    <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
+                      {rightKeybinds}
+                    </text>
+                  </box>
+                </box>
+              </box>
             )
           })()}
         </box>

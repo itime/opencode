@@ -477,6 +477,8 @@ export const dict = {
   "notification.session.responseReady.title": "Response ready",
   "notification.session.error.title": "Session error",
   "notification.session.error.fallbackDescription": "An error occurred",
+  "notification.session.handoff.title": "Context threshold reached",
+  "notification.session.handoff.description": "Context usage at {{usage}}% (threshold: {{threshold}}%). Consider using /handoff to start a fresh session.",
 
   "home.recentProjects": "Recent projects",
   "home.empty.title": "No recent projects",

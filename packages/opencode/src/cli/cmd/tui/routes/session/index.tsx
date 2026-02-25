@@ -357,6 +357,20 @@ export function Session() {
       },
     },
     {
+      title: "Copy session ID",
+      value: "session.copy_id",
+      category: "Session",
+      slash: {
+        name: "id",
+      },
+      onSelect: async (dialog) => {
+        await Clipboard.copy(route.sessionID)
+          .then(() => toast.show({ message: `Session ID copied: ${route.sessionID}`, variant: "success" }))
+          .catch(() => toast.show({ message: "Failed to copy session ID", variant: "error" }))
+        dialog.clear()
+      },
+    },
+    {
       title: "Jump to message",
       value: "session.timeline",
       keybind: "session_timeline",

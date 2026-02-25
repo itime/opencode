@@ -476,6 +476,8 @@ export const dict = {
   "notification.session.responseReady.title": "回复已就绪",
   "notification.session.error.title": "会话错误",
   "notification.session.error.fallbackDescription": "发生错误",
+  "notification.session.handoff.title": "上下文阈值已达到",
+  "notification.session.handoff.description": "上下文使用率 {{usage}}%（阈值：{{threshold}}%）。建议使用 /handoff 开始新会话。",
 
   "home.recentProjects": "最近项目",
   "home.empty.title": "没有最近项目",
