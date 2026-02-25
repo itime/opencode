@@ -18,6 +18,33 @@ import { Question } from "@/question"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
+
+  /** Extract completed key-value pairs from partial JSON: `{"filePath":"/foo","content":"hel` → { filePath: "/foo" } */
+  function parsePartialJson(raw: string): Record<string, any> | undefined {
+    try {
+      return JSON.parse(raw)
+    } catch {}
+    try {
+      return JSON.parse(raw + "}")
+    } catch {}
+    try {
+      return JSON.parse(raw + '"}')
+    } catch {}
+    const result: Record<string, any> = {}
+    const re =
+      /"([^"\\]*(?:\\.[^"\\]*)*)":\s*(?:"([^"\\]*(?:\\.[^"\\]*)*)"|(\d+(?:\.\d+)?)|(\btrue\b|\bfalse\b|\bnull\b))\s*[,}]/g
+    let m
+    while ((m = re.exec(raw)) !== null) {
+      const key = m[1]
+      if (m[2] !== undefined) result[key] = m[2]
+      else if (m[3] !== undefined) result[key] = Number(m[3])
+      else if (m[4] === "true") result[key] = true
+      else if (m[4] === "false") result[key] = false
+      else if (m[4] === "null") result[key] = null
+    }
+    if (Object.keys(result).length > 0) return result
+    return undefined
+  }
   const log = Log.create({ service: "session.processor" })
 
   export type Info = Awaited<ReturnType<typeof create>>
@@ -125,8 +152,18 @@ export namespace SessionProcessor {
                   toolcalls[value.id] = part as MessageV2.ToolPart
                   break
 
-                case "tool-input-delta":
+                case "tool-input-delta": {
+                  const match = toolcalls[value.id]
+                  if (match && match.state.status === "pending" && Object.keys(match.state.input).length === 0) {
+                    match.state.raw += value.delta
+                    const partial = parsePartialJson(match.state.raw)
+                    if (partial) {
+                      match.state.input = partial
+                      await Session.updatePart(match)
+                    }
+                  }
                   break
+                }
 
                 case "tool-input-end":
                   break

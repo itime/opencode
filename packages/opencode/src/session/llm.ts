@@ -27,6 +27,39 @@ export namespace LLM {
   const log = Log.create({ service: "llm" })
   export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
 
+  function repairTruncatedJson(input: string): string | undefined {
+    try {
+      JSON.parse(input)
+      return input
+    } catch {}
+    let s = input.trimEnd()
+    if (s.endsWith(",")) s = s.slice(0, -1)
+    let inStr = false
+    const stack: string[] = []
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i]
+      if (inStr) {
+        if (ch === "\\" && i + 1 < s.length) {
+          i++
+          continue
+        }
+        if (ch === '"') inStr = false
+        continue
+      }
+      if (ch === '"') inStr = true
+      else if (ch === "{") stack.push("}")
+      else if (ch === "[") stack.push("]")
+      else if (ch === "}" || ch === "]") stack.pop()
+    }
+    if (inStr) s += '"'
+    while (stack.length > 0) s += stack.pop()
+    try {
+      JSON.parse(s)
+      return s
+    } catch {}
+    return undefined
+  }
+
   export type StreamInput = {
     user: MessageV2.User
     sessionID: string
@@ -189,6 +222,16 @@ export namespace LLM {
           return {
             ...failed.toolCall,
             toolName: lower,
+          }
+        }
+        const repaired = repairTruncatedJson(failed.toolCall.input)
+        if (repaired) {
+          l.info("repaired truncated tool call JSON", {
+            tool: failed.toolCall.toolName,
+          })
+          return {
+            ...failed.toolCall,
+            input: repaired,
           }
         }
         return {
