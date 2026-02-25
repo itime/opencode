@@ -152,6 +152,7 @@ export function Session() {
   const [showHeader, setShowHeader] = kv.signal("header_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
+  const [isAtBottom, setIsAtBottom] = createSignal(true)
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
@@ -991,7 +992,13 @@ export function Session() {
               <Header />
             </Show>
             <scrollbox
-              ref={(r) => (scroll = r)}
+              ref={(r) => {
+                scroll = r
+                r.verticalScrollBar.on("change", () => {
+                  const maxScroll = Math.max(0, r.scrollHeight - r.viewport.height)
+                  setIsAtBottom(maxScroll <= 0 || r.scrollTop >= maxScroll - 1)
+                })
+              }}
               viewportOptions={{
                 paddingRight: showScrollbar() ? 1 : 0,
               }}
@@ -1000,7 +1007,7 @@ export function Session() {
                 visible: showScrollbar(),
                 trackOptions: {
                   backgroundColor: theme.backgroundElement,
-                  foregroundColor: theme.border,
+                  foregroundColor: theme.textMuted,
                 },
               }}
               stickyScroll={true}
@@ -1104,6 +1111,13 @@ export function Session() {
                 )}
               </For>
             </scrollbox>
+            <Show when={!isAtBottom()}>
+              <box flexShrink={0} justifyContent="center" flexDirection="row" onMouseUp={() => toBottom()}>
+                <text fg={theme.accent} wrapMode="none">
+                  {"▼ more below ▼"}
+                </text>
+              </box>
+            </Show>
             <box flexShrink={0}>
               <Show when={permissions().length > 0}>
                 <PermissionPrompt request={permissions()[0]} />
