@@ -684,6 +684,16 @@ export type EventSessionCompacted = {
   }
 }
 
+export type EventSessionHandoffThresholdReached = {
+  type: "session.handoff.threshold_reached"
+  properties: {
+    sessionID: string
+    usage: number
+    threshold: number
+    action: "suggest" | "auto"
+  }
+}
+
 export type EventFileWatcherUpdated = {
   type: "file.watcher.updated"
   properties: {
@@ -964,6 +974,7 @@ export type Event =
   | EventQuestionReplied
   | EventQuestionRejected
   | EventSessionCompacted
+  | EventSessionHandoffThresholdReached
   | EventFileWatcherUpdated
   | EventTodoUpdated
   | EventTuiPromptAppend
@@ -1570,6 +1581,10 @@ export type ProviderConfig = {
           [key: string]: unknown | boolean | undefined
         }
       }
+      /**
+       * Shorthand for limit.context - context window size in tokens
+       */
+      context?: number
     }
   }
   whitelist?: Array<string>
@@ -1864,6 +1879,20 @@ export type Config = {
      * Token buffer for compaction. Leaves enough window to avoid overflow during compaction.
      */
     reserved?: number
+  }
+  handoff?: {
+    /**
+     * Enable handoff threshold detection (default: true)
+     */
+    enabled?: boolean
+    /**
+     * Context usage threshold (0-1) to suggest handoff (default: 0.85)
+     */
+    threshold?: number
+    /**
+     * Automatically trigger handoff when threshold is reached (default: false)
+     */
+    auto?: boolean
   }
   experimental?: {
     disable_paste_summary?: boolean
